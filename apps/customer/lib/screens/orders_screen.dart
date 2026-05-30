@@ -4,6 +4,7 @@ import 'package:freightfair/widgets/order_card.dart';
 import '../controllers/app_controller.dart';
 import '../data/mock_data.dart';
 import '../widgets/app_page_route.dart';
+import '../widgets/order_search_bar.dart';
 import 'live_tracking_screen.dart';
 import 'order_detail_screen.dart';
 
@@ -107,45 +108,14 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     return SafeArea(
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Text('Orders', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
-                    const Spacer(),
-                    IconButton(
-                      onPressed: _toggleSearch,
-                      icon: Icon(_isSearching ? Icons.close_rounded : Icons.search_rounded),
-                    ),
-                  ],
-                ),
-                if (_isSearching)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: TextField(
-                      controller: _searchController,
-                      autofocus: true,
-                      onChanged: _onSearchChanged,
-                      decoration: InputDecoration(
-                        hintText: 'Search by order ID, route, driver or status',
-                        prefixIcon: const Icon(Icons.search_rounded),
-                        suffixIcon: _searchQuery.isEmpty
-                            ? null
-                            : IconButton(
-                                icon: const Icon(Icons.close_rounded),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  _onSearchChanged('');
-                                },
-                              ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+          OrderSearchBar(
+            title: 'Orders',
+            isSearching: _isSearching,
+            onToggle: _toggleSearch,
+            controller: _searchController,
+            onChanged: _onSearchChanged,
+            searchQuery: _searchQuery,
+            hintText: 'Search by order ID, route, driver or status',
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
