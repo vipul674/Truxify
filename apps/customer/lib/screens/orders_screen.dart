@@ -2,10 +2,8 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:truxify/widgets/order_card.dart';
 import '../services/order_service.dart';
-import '../constants/app_colors.dart';
 import '../controllers/app_controller.dart';
 import '../core/offline/cache/cache_manager.dart';
-import '../data/mock_data.dart';
 import '../models/app_models.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_page_route.dart';
@@ -135,11 +133,13 @@ class _OrdersScreenState extends State<OrdersScreen>
           }).toList();
 
           _historyOrders = historyOrders.map((order) {
+            final rawAmount = order['total_amount'] ?? 0;
+            final amountInRupees = (rawAmount is num) ? (rawAmount / 100).toStringAsFixed(0) : rawAmount.toString();
             return HistoryOrderData(
               orderId: order['order_display_id']?.toString() ?? '',
               route: '${order['pickup_address']} → ${order['drop_address']}',
               date: order['pickup_date']?.toString() ?? '',
-              amount: '₹${order['total_amount'] ?? 0}',
+              amount: '₹$amountInRupees',
               status: _formatStatus(order['status']?.toString() ?? 'completed'),
               driver: order['driver_id']?.toString() ?? '',
               truckNumber: order['truck_id']?.toString() ?? '',

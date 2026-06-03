@@ -39,7 +39,7 @@ class OrderService {
       'pickup_time': pickupTime,
       'goods_type': goodsType,
       'weight_tonnes': weightTonnes,
-      'total_amount': totalAmount,
+      'total_amount': (totalAmount * 100).toInt(),
       'eta': 'TBD',
     });
   }
