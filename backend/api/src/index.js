@@ -3,6 +3,7 @@ import cors from 'cors';
 import http from 'http';
 import dotenv from 'dotenv';
 import path from 'path';
+import rateLimit from 'express-rate-limit';
 
 // Pre-load DB config to execute client setups
 import './config/db.js';
@@ -17,6 +18,7 @@ import driverRoutes from './routes/driverRoutes.js';
 
 const app = express();
 const server = http.createServer(app);
+app.set('trust proxy', 1); // ← add this
 
 // Enable CORS for frontend clients (Flutter Web, mobile, etc.)
 app.use(cors({
@@ -26,6 +28,30 @@ app.use(cors({
 }));
 
 app.use(express.json());
+
+// ============================================================================
+// RATE LIMITING
+// ============================================================================
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.originalUrl === '/api/health',
+  message: { error: 'Too many requests, please try again later.' }
+});
+
+const healthLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: 'Health check rate limit exceeded.' }
+});
+
+app.use('/api/', limiter);
+app.use('/api/health', healthLimiter);
+
+
 
 // ============================================================================
 // REQUEST LOGGER
