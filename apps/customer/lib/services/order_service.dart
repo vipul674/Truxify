@@ -70,7 +70,7 @@ class OrderService {
     debugPrint('Orders response: $response');
 
     return List<Map<String, dynamic>>.from(response);
-  } 
+  }
 
   Future<List<Map<String, dynamic>>> fetchOrderTimeline(
     String orderDisplayId,
@@ -104,12 +104,12 @@ class OrderService {
         .select()
         .eq('customer_id', userId)
         .inFilter('status', [
-          'completed',
-          'delivered',
-          'payment_released',
-          'cancelled',
-        ]);
+      'completed',
+      'delivered',
+      'payment_released',
+      'cancelled',
+    ]);
 
     return List<Map<String, dynamic>>.from(response);
   }
-  }
+}
