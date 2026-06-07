@@ -163,6 +163,7 @@ describe('Bid Routes', () => {
     m.store.load_offers.push({
       id: 'load-1',
       order_display_id: 'OD1',
+      status: 'available',
     });
 
     m.store.load_bids.push({
