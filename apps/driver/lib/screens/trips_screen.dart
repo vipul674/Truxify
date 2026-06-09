@@ -1178,7 +1178,6 @@ class _LoadOfferCard extends StatelessWidget {
       case BidStatus.rejected:
         return const StatusPill(label: 'Rejected', backgroundColor: TruxifyColors.errorLight, foregroundColor: TruxifyColors.error);
       case BidStatus.pending:
-      default:
         return const StatusPill(label: 'Pending', backgroundColor: TruxifyColors.warningLight, foregroundColor: TruxifyColors.warning);
     }
   }
