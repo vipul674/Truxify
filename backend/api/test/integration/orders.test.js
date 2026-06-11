@@ -654,6 +654,38 @@ describe('GET /api/orders/:id — order details', () => {
     expect(res.body.driver.name).toBe('Test Driver');
   });
 
+  it('exposes delivery_otp to customer but strips it for driver', async () => {
+    m.store.orders.push({
+      id: 'order-3',
+      customer_id: 'customer-123',
+      driver_id: 'driver-123',
+      order_display_id: 'OD3',
+      delivery_otp: '654321',
+    });
+
+    const app = buildApp();
+
+    // 1. Customer request
+    const customerRes = await request(app)
+      .get('/api/orders/order-3')
+      .set({
+        'x-user-id': 'customer-123',
+        'x-user-role': 'customer'
+      });
+    expect(customerRes.status).toBe(200);
+    expect(customerRes.body.order.delivery_otp).toBe('654321');
+
+    // 2. Driver request
+    const driverRes = await request(app)
+      .get('/api/orders/order-3')
+      .set({
+        'x-user-id': 'driver-123',
+        'x-user-role': 'driver'
+      });
+    expect(driverRes.status).toBe(200);
+    expect(driverRes.body.order).not.toHaveProperty('delivery_otp');
+  });
+
   it('returns 500 on DB error', async () => {
     m.programError('db failure');
 
@@ -882,9 +914,10 @@ describe('Delivery OTP Verification and Milestones', () => {
     expect(res.body.error).toBe('Cannot set Delivered milestone directly. Use /verify-delivery endpoint to confirm delivery.');
   });
 
-  it('generates and returns OTP when moving to In Transit milestone', async () => {
+  it('generates OTP but does not return it in response when moving to In Transit milestone', async () => {
     m.store.orders = [{
       id: 'order-1',
+      customer_id: 'customer-456',
       driver_id: 'driver-123',
       order_display_id: 'ORD001',
       status: 'picked_up',
@@ -895,6 +928,7 @@ describe('Delivery OTP Verification and Milestones', () => {
       milestone: 'In Transit',
       completed: false
     }];
+    m.store.notifications = [];
 
     const app = buildApp();
     const res = await request(app)
@@ -906,13 +940,19 @@ describe('Delivery OTP Verification and Milestones', () => {
       .send({ milestone: 'In Transit' });
 
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('otp');
-    expect(res.body.otp).toMatch(/^\d{6}$/); // 6-digit OTP
+    expect(res.body).not.toHaveProperty('otp');
+    expect(res.body.order).not.toHaveProperty('delivery_otp');
 
     const order = m.store.orders.find(o => o.id === 'order-1');
-    expect(order.delivery_otp).toBe(res.body.otp);
+    expect(order.delivery_otp).toMatch(/^\d{6}$/); // 6-digit OTP
     expect(order.otp_verified).toBe(false);
     expect(order.otp_generated_at).toBeDefined();
+
+    // Verify customer notification was created
+    const notification = m.store.notifications.find(n => n.user_id === 'customer-456');
+    expect(notification).toBeTruthy();
+    expect(notification.body).toContain(order.delivery_otp);
+    expect(notification.notif_type).toBe('delivery_otp');
   });
 
   it('fails OTP verification if missing OTP', async () => {
@@ -1001,6 +1041,7 @@ describe('Delivery OTP Verification and Milestones', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.message).toMatch(/Delivery verified successfully/i);
+    expect(res.body.order).not.toHaveProperty('delivery_otp');
 
     const order = m.store.orders.find(o => o.id === 'order-1');
     expect(order.otp_verified).toBe(true);
@@ -1163,10 +1204,11 @@ describe('Delivery OTP Verification and Milestones', () => {
     }
   });
 
-  it('regenerates OTP when milestone In Transit is called and existing OTP has expired', async () => {
+  it('regenerates OTP but does not return it in response when milestone In Transit is called and existing OTP has expired', async () => {
     const orderId = 'order-regen';
     m.store.orders = [{
       id: orderId,
+      customer_id: 'customer-456',
       driver_id: 'driver-123',
       order_display_id: 'ORD-REGEN',
       delivery_otp: '123456',
@@ -1179,6 +1221,7 @@ describe('Delivery OTP Verification and Milestones', () => {
       milestone: 'In Transit',
       completed: true
     }];
+    m.store.notifications = [];
 
     const app = buildApp();
     const res = await request(app)
@@ -1190,12 +1233,18 @@ describe('Delivery OTP Verification and Milestones', () => {
       .send({ milestone: 'In Transit' });
 
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('otp');
-    expect(res.body.otp).not.toBe('123456');
+    expect(res.body).not.toHaveProperty('otp');
+    expect(res.body.order).not.toHaveProperty('delivery_otp');
 
     const order = m.store.orders.find(o => o.id === orderId);
-    expect(order.delivery_otp).toBe(res.body.otp);
+    expect(order.delivery_otp).not.toBe('123456');
+    expect(order.delivery_otp).toMatch(/^\d{6}$/);
     expect(new Date(order.otp_generated_at).getTime()).toBeGreaterThan(Date.now() - 5000);
+
+    // Verify customer notification was created
+    const notification = m.store.notifications.find(n => n.user_id === 'customer-456');
+    expect(notification).toBeTruthy();
+    expect(notification.body).toContain(order.delivery_otp);
   });
 });
 
