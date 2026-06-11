@@ -182,6 +182,50 @@ class OrderService {
     return orders;
   }
 
+  Future<List<Map<String, dynamic>>> searchTrucks({
+    required double pickupLat,
+    required double pickupLng,
+    required double dropLat,
+    required double dropLng,
+    required double weightTonnes,
+    bool isFragile = false,
+    bool isStackable = true,
+  }) async {
+    final token = _client.auth.currentSession?.accessToken;
+    final userId = SupabaseService.requireUserId();
+
+    final params = <String, String>{
+      'pickup_lat': pickupLat.toString(),
+      'pickup_lng': pickupLng.toString(),
+      'drop_lat': dropLat.toString(),
+      'drop_lng': dropLng.toString(),
+      'weight_tonnes': weightTonnes.toString(),
+      'is_fragile': isFragile.toString(),
+      'is_stackable': isStackable.toString(),
+    };
+
+    final uri = Uri.parse('$_apiBaseUrl/api/trucks/search').replace(queryParameters: params);
+    final response = await _httpClient.get(
+      uri,
+      headers: <String, String>{
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        'x-user-id': userId,
+        'x-user-role': 'customer',
+      },
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError('Failed to search trucks: ${response.statusCode}');
+    }
+
+    final List<dynamic> body = response.body.isNotEmpty
+        ? (jsonDecode(response.body) as List<dynamic>)
+        : <dynamic>[];
+
+    return body.cast<Map<String, dynamic>>();
+  }
+
   Future<List<Map<String, dynamic>>> fetchHistoryOrders() async {
     final userId = SupabaseService.requireUserId();
 
