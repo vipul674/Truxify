@@ -116,7 +116,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen>
                       ?.copyWith(fontWeight: FontWeight.w800)),
               const SizedBox(height: 8),
               Text(
-                VoiceAiService.buildResponse(_order),
+                VoiceAiService.buildResponse(VoiceAiOrderInput.fromMap(_order)),
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     color: TruxifyColors.adaptiveSecondaryText(context)),
@@ -708,26 +708,23 @@ class _ActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      enabled: onTap != null,
-      child: OutlinedButton(
-        onPressed: onTap,
-        style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
-          minimumSize: const Size(0, 0),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: onTap == null ? TruxifyColors.border : color),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: onTap == null ? const TextStyle(color: TruxifyColors.border) : null,
-            ),
-          ],
-        ),
+    return OutlinedButton(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+        minimumSize: const Size(0, 0),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: onTap == null ? TruxifyColors.border : color),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: onTap == null ? const TextStyle(color: TruxifyColors.border) : null,
+          ),
+        ],
       ),
     );
   }
