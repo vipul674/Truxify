@@ -7,7 +7,7 @@
 --   2. Go to SQL Editor → New Query
 --   3. Paste this ENTIRE file and click "Run"
 --   4. Copy your project URL + anon key into .env
---   5. You're done! All 26 tables, indexes, RLS policies, RPC functions,
+--   5. You're done! All 27 tables, indexes, RLS policies, RPC functions,
 --      and seed data are ready.
 --
 -- DESIGN PRINCIPLES:
@@ -55,7 +55,7 @@ $$;
 
 
 -- ############################################################################
--- PART 1: TABLE DEFINITIONS (26 tables)
+-- PART 1: TABLE DEFINITIONS (27 tables)
 -- ############################################################################
 
 
@@ -543,6 +543,25 @@ create index if not exists idx_ratings_order    on ratings (order_display_id);
 
 
 -- ────────────────────────────────────────────────────────────────────────────
+-- 19A. PROCESSED BATCHES (offline sync idempotency)
+-- ────────────────────────────────────────────────────────────────────────────
+create table if not exists processed_batches (
+  id uuid primary key default gen_random_uuid(),
+  idempotency_key text not null,
+  user_id uuid not null,
+  event_count int not null default 0,
+  processed_at timestamptz not null default now(),
+  constraint processed_batches_user_idempotency_unique unique (user_id, idempotency_key)
+);
+
+create index if not exists idx_processed_batches_user_id
+on processed_batches (user_id);
+
+create index if not exists idx_processed_batches_processed_at
+on processed_batches (processed_at);
+
+
+-- ────────────────────────────────────────────────────────────────────────────
 -- 19. WALLET TRANSACTIONS  (driver earnings / withdrawals)
 -- ────────────────────────────────────────────────────────────────────────────
 create table if not exists wallet_transactions (
@@ -676,6 +695,7 @@ alter table trip_stops              enable row level security;
 alter table route_map_points        enable row level security;
 alter table ratings                 enable row level security;
 alter table wallet_transactions     enable row level security;
+alter table processed_batches       enable row level security;
 alter table demand_routes           enable row level security;
 alter table notifications           enable row level security;
 alter table faqs                    enable row level security;
@@ -1014,6 +1034,18 @@ create policy "Drivers view own wallet transactions"
   on wallet_transactions for select
   to authenticated
   using (driver_id = get_profile_id());
+
+
+-- 19A. PROCESSED BATCHES
+create policy "Service role full access on processed_batches"
+  on processed_batches for all
+  to service_role
+  using (true) with check (true);
+
+create policy "Users view own processed batches"
+  on processed_batches for select
+  to authenticated
+  using (user_id = get_profile_id());
 
 
 -- 20. DEMAND ROUTES
@@ -1637,7 +1669,7 @@ on conflict do nothing;
 -- ✅ SETUP COMPLETE
 -- ============================================================================
 -- Your Supabase database now has:
---   • 24 tables with indexes
+--   • 25 tables with indexes
 --   • Row Level Security enabled + permissive policies
 --   • Auto-updating `updated_at` triggers
 --   • 4 RPC functions: accept_bid_tx, withdraw_funds_tx, complete_trip_tx, submit_rating_tx
