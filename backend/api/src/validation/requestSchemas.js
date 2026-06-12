@@ -111,3 +111,13 @@ export const verifyDeliverySchema = z.object({
     z.string().regex(/^\d{6}$/, { message: 'OTP must be 6 digits' }).optional()
   )
 });
+
+export const changeDropSchema = z.object({
+  drop_address: z.string().min(3, 'Drop address is required'),
+  drop_lat: coerceNumber(z.number({ invalid_type_error: 'Latitude must be a number' }).min(-90).max(90)),
+  drop_lng: coerceNumber(z.number({ invalid_type_error: 'Longitude must be a number' }).min(-180).max(180)),
+}).passthrough();
+
+export const cancelOrderSchema = z.object({
+  reason: z.string().max(500).optional().nullable(),
+}).passthrough();
