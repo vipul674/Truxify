@@ -1,5 +1,30 @@
+class VoiceAiOrderInput {
+  final String? status;
+  final String? eta;
+  final String? dropAddress;
+
+  const VoiceAiOrderInput({
+    this.status,
+    this.eta,
+    this.dropAddress,
+  });
+
+  static VoiceAiOrderInput? fromMap(Map<String, dynamic>? map) {
+    if (map == null) return null;
+    return VoiceAiOrderInput(
+      status: map['status']?.toString(),
+      eta: map['eta']?.toString(),
+      dropAddress: map['drop_address']?.toString(),
+    );
+  }
+}
+
 class VoiceAiService {
-  static String formatStatus(String status) {
+  static String formatStatus(String? rawStatus) {
+    final status = rawStatus?.trim().toLowerCase() ?? '';
+    if (status.isEmpty) {
+      return 'pending';
+    }
     switch (status) {
       case 'driver_assigned':
         return 'driver assigned';
@@ -19,18 +44,18 @@ class VoiceAiService {
     }
   }
 
-  static String buildResponse(Map<String, dynamic>? order) {
+  static String buildResponse(VoiceAiOrderInput? order) {
     if (order == null) {
       return 'Loading your shipment details…';
     }
 
-    final rawEta = order['eta']?.toString().trim();
+    final rawEta = order.eta?.trim();
     final eta = (rawEta != null && rawEta.isNotEmpty) ? rawEta : null;
 
-    final rawStatus = order['status']?.toString().trim() ?? '';
+    final rawStatus = order.status?.trim() ?? '';
     final status = formatStatus(rawStatus.isNotEmpty ? rawStatus : 'pending');
 
-    final rawDropAddress = order['drop_address']?.toString().trim();
+    final rawDropAddress = order.dropAddress?.trim();
     final dropAddress = (rawDropAddress != null && rawDropAddress.isNotEmpty)
         ? rawDropAddress
         : 'your destination';

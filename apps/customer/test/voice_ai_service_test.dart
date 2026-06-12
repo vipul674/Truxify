@@ -2,18 +2,64 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:truxify/services/voice_ai_service.dart';
 
 void main() {
-  group('VoiceAiService Tests', () {
-    test('buildResponse with null order returns loading message', () {
+  group('VoiceAiOrderInput Tests', () {
+    test('fromMap with null input returns null', () {
+      expect(VoiceAiOrderInput.fromMap(null), isNull);
+    });
+
+    test('fromMap with valid map constructs DTO correctly', () {
+      final map = <String, dynamic>{
+        'status': 'in_transit',
+        'eta': 'Today 4:30 PM',
+        'drop_address': 'Vadodara',
+      };
+      final input = VoiceAiOrderInput.fromMap(map);
+      expect(input, isNotNull);
+      expect(input!.status, equals('in_transit'));
+      expect(input.eta, equals('Today 4:30 PM'));
+      expect(input.dropAddress, equals('Vadodara'));
+    });
+  });
+
+  group('VoiceAiService.formatStatus Tests', () {
+    test('formats standard database statuses correctly', () {
+      expect(VoiceAiService.formatStatus('driver_assigned'), equals('driver assigned'));
+      expect(VoiceAiService.formatStatus('in_transit'), equals('in transit'));
+      expect(VoiceAiService.formatStatus('payment_released'), equals('payment released'));
+      expect(VoiceAiService.formatStatus('completed'), equals('delivered'));
+      expect(VoiceAiService.formatStatus('delivered'), equals('delivered'));
+      expect(VoiceAiService.formatStatus('cancelled'), equals('cancelled'));
+      expect(VoiceAiService.formatStatus('pending'), equals('pending'));
+    });
+
+    test('normalizes casing and trims whitespace', () {
+      expect(VoiceAiService.formatStatus('  IN_TRANSIT  '), equals('in transit'));
+      expect(VoiceAiService.formatStatus('  Driver_Assigned  '), equals('driver assigned'));
+    });
+
+    test('defaults to pending on null, empty, or whitespace-only inputs', () {
+      expect(VoiceAiService.formatStatus(null), equals('pending'));
+      expect(VoiceAiService.formatStatus(''), equals('pending'));
+      expect(VoiceAiService.formatStatus('   '), equals('pending'));
+    });
+
+    test('replaces underscores for unknown custom statuses', () {
+      expect(VoiceAiService.formatStatus('custom_state_here'), equals('custom state here'));
+    });
+  });
+
+  group('VoiceAiService.buildResponse Tests', () {
+    test('buildResponse with null DTO returns loading message', () {
       final response = VoiceAiService.buildResponse(null);
       expect(response, equals('Loading your shipment details…'));
     });
 
-    test('buildResponse with complete order data maps correctly', () {
-      final order = <String, dynamic>{
-        'status': 'in_transit',
-        'drop_address': 'Vadodara',
-        'eta': 'Today 4:30 PM',
-      };
+    test('buildResponse with complete DTO maps correctly', () {
+      const order = VoiceAiOrderInput(
+        status: 'in_transit',
+        dropAddress: 'Vadodara',
+        eta: 'Today 4:30 PM',
+      );
       final response = VoiceAiService.buildResponse(order);
       expect(
         response,
@@ -22,10 +68,10 @@ void main() {
     });
 
     test('buildResponse with missing ETA uses fallback message', () {
-      final order = <String, dynamic>{
-        'status': 'pending',
-        'drop_address': 'Vadodara',
-      };
+      const order = VoiceAiOrderInput(
+        status: 'pending',
+        dropAddress: 'Vadodara',
+      );
       final response = VoiceAiService.buildResponse(order);
       expect(
         response,
@@ -34,11 +80,11 @@ void main() {
     });
 
     test('buildResponse with driver_assigned status formats status correctly', () {
-      final order = <String, dynamic>{
-        'status': 'driver_assigned',
-        'drop_address': 'Mumbai',
-        'eta': 'Today 5:00 PM',
-      };
+      const order = VoiceAiOrderInput(
+        status: 'driver_assigned',
+        dropAddress: 'Mumbai',
+        eta: 'Today 5:00 PM',
+      );
       final response = VoiceAiService.buildResponse(order);
       expect(
         response,
@@ -47,10 +93,10 @@ void main() {
     });
 
     test('buildResponse fallback for unknown status formatted properly', () {
-      final order = <String, dynamic>{
-        'status': 'custom_status_value',
-        'drop_address': 'Jaipur',
-      };
+      const order = VoiceAiOrderInput(
+        status: 'custom_status_value',
+        dropAddress: 'Jaipur',
+      );
       final response = VoiceAiService.buildResponse(order);
       expect(
         response,
@@ -59,10 +105,10 @@ void main() {
     });
 
     test('buildResponse handles missing status (defaults to pending)', () {
-      final order = <String, dynamic>{
-        'drop_address': 'Delhi',
-        'eta': 'Tomorrow 10:00 AM',
-      };
+      const order = VoiceAiOrderInput(
+        dropAddress: 'Delhi',
+        eta: 'Tomorrow 10:00 AM',
+      );
       final response = VoiceAiService.buildResponse(order);
       expect(
         response,
@@ -71,11 +117,11 @@ void main() {
     });
 
     test('buildResponse handles blank/whitespace status (defaults to pending)', () {
-      final order = <String, dynamic>{
-        'status': '   ',
-        'drop_address': 'Delhi',
-        'eta': 'Tomorrow 10:00 AM',
-      };
+      const order = VoiceAiOrderInput(
+        status: '   ',
+        dropAddress: 'Delhi',
+        eta: 'Tomorrow 10:00 AM',
+      );
       final response = VoiceAiService.buildResponse(order);
       expect(
         response,
@@ -84,10 +130,10 @@ void main() {
     });
 
     test('buildResponse handles missing drop address (defaults to your destination)', () {
-      final order = <String, dynamic>{
-        'status': 'in_transit',
-        'eta': 'Today 8:00 PM',
-      };
+      const order = VoiceAiOrderInput(
+        status: 'in_transit',
+        eta: 'Today 8:00 PM',
+      );
       final response = VoiceAiService.buildResponse(order);
       expect(
         response,
@@ -96,11 +142,11 @@ void main() {
     });
 
     test('buildResponse handles blank/whitespace drop address (defaults to your destination)', () {
-      final order = <String, dynamic>{
-        'status': 'in_transit',
-        'drop_address': '   ',
-        'eta': 'Today 8:00 PM',
-      };
+      const order = VoiceAiOrderInput(
+        status: 'in_transit',
+        dropAddress: '   ',
+        eta: 'Today 8:00 PM',
+      );
       final response = VoiceAiService.buildResponse(order);
       expect(
         response,
@@ -109,11 +155,11 @@ void main() {
     });
 
     test('buildResponse treats blank/whitespace ETA as missing', () {
-      final order = <String, dynamic>{
-        'status': 'in_transit',
-        'drop_address': 'Chennai',
-        'eta': '   ',
-      };
+      const order = VoiceAiOrderInput(
+        status: 'in_transit',
+        dropAddress: 'Chennai',
+        eta: '   ',
+      );
       final response = VoiceAiService.buildResponse(order);
       expect(
         response,
