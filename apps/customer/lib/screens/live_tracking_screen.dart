@@ -27,8 +27,14 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen>
   Map<String, dynamic>? _order;
   RealtimeChannel? _ordersChannel;
   List<LatLng> _routePoints = const [_fallbackPickupPoint, _fallbackDropPoint];
-  String _driverName = 'Loading driver...';
-  String _truckNumber = 'Loading truck...';
+
+  static const String _loadingDriverText = 'Loading driver...';
+  static const String _loadingTruckText = 'Loading truck...';
+  static const String _fallbackDriverText = 'Driver not assigned';
+  static const String _fallbackTruckText = 'Truck not assigned';
+
+  String _driverName = _loadingDriverText;
+  String _truckNumber = _loadingTruckText;
   bool _isLoadingDetails = false;
 
   @override
@@ -70,21 +76,21 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen>
           if (dn != null && dn.isNotEmpty) {
             _driverName = dn;
           } else if (order['driver_id'] == null) {
-            _driverName = 'Driver not assigned';
+            _driverName = _fallbackDriverText;
           } else {
-            _driverName = 'Loading driver...';
+            _driverName = _loadingDriverText;
           }
 
           if (tn != null && tn.isNotEmpty) {
             _truckNumber = tn;
           } else if (order['truck_id'] == null) {
-            _truckNumber = 'Truck not assigned';
+            _truckNumber = _fallbackTruckText;
           } else {
-            _truckNumber = 'Loading truck...';
+            _truckNumber = _loadingTruckText;
           }
         } else {
-          _driverName = 'Driver not assigned';
-          _truckNumber = 'Truck not assigned';
+          _driverName = _fallbackDriverText;
+          _truckNumber = _fallbackTruckText;
         }
 
         final pickupLat = (order?['pickup_lat'] as num?)?.toDouble();
@@ -115,8 +121,8 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen>
     if (driverId == null && truckId == null) {
       if (mounted) {
         setState(() {
-          _driverName = 'Driver not assigned';
-          _truckNumber = 'Truck not assigned';
+          _driverName = _fallbackDriverText;
+          _truckNumber = _fallbackTruckText;
           _isLoadingDetails = false;
         });
       }
@@ -130,36 +136,43 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen>
     }
 
     try {
-      final futures = <Future>[];
-
-      if (driverId != null) {
-        futures.add(_orderService.fetchDriverName(driverId.toString()));
-      } else {
-        futures.add(Future.value(null));
-      }
-
-      if (truckId != null) {
-        futures.add(_orderService.fetchTruckNumber(truckId.toString()));
-      } else {
-        futures.add(Future.value(null));
-      }
-
-      final results = await Future.wait(futures);
+      final results = await Future.wait<String?>([
+        driverId != null
+            ? _orderService.fetchDriverName(driverId.toString())
+            : Future.value(null),
+        truckId != null
+            ? _orderService.fetchTruckNumber(truckId.toString())
+            : Future.value(null),
+      ]);
 
       if (!mounted) return;
 
+      if (_order?['driver_id'] != driverId || _order?['truck_id'] != truckId) {
+        return;
+      }
+
       setState(() {
-        _driverName = results[0]?.toString() ?? _order?['driver_name']?.toString() ?? 'Driver not assigned';
-        _truckNumber = results[1]?.toString() ?? _order?['truck_number']?.toString() ?? 'Truck not assigned';
+        _driverName = results[0] ??
+            _order?['driver_name']?.toString() ??
+            _fallbackDriverText;
+        _truckNumber = results[1] ??
+            _order?['truck_number']?.toString() ??
+            _fallbackTruckText;
         _isLoadingDetails = false;
       });
     } catch (e) {
       debugPrint('Error fetching driver/truck details: $e');
       if (!mounted) return;
+
+      if (_order?['driver_id'] != driverId || _order?['truck_id'] != truckId) {
+        return;
+      }
+
       setState(() {
         _isLoadingDetails = false;
-        _driverName = _order?['driver_name']?.toString() ?? 'Driver not assigned';
-        _truckNumber = _order?['truck_number']?.toString() ?? 'Truck not assigned';
+        _driverName = _order?['driver_name']?.toString() ?? _fallbackDriverText;
+        _truckNumber =
+            _order?['truck_number']?.toString() ?? _fallbackTruckText;
       });
     }
   }

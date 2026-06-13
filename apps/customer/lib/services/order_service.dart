@@ -234,8 +234,8 @@ class OrderService {
           .eq('id', driverId)
           .maybeSingle();
       return response?['full_name']?.toString();
-    } catch (e) {
-      debugPrint('Error fetching driver name: $e');
+    } catch (e, st) {
+      debugPrint('Error fetching driver name: $e\n$st');
       return null;
     }
   }
@@ -248,8 +248,8 @@ class OrderService {
           .eq('id', truckId)
           .maybeSingle();
       return response?['number_plate']?.toString();
-    } catch (e) {
-      debugPrint('Error fetching truck number: $e');
+    } catch (e, st) {
+      debugPrint('Error fetching truck number: $e\n$st');
       return null;
     }
   }
