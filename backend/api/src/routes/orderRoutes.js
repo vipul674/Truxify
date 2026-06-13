@@ -483,17 +483,17 @@ router.post('/:id/bids/:bidId/accept', authenticate, requireRole(['customer']), 
 
     if (rpcErr) return res.status(500).json({ error: 'Failed to accept bid atomically.', details: rpcErr.message });
 
-    // Fetch driver's Polygon wallet address for escrow deposit
-    const { data: driverDetails } = await supabase
-      .from('driver_details')
-      .select('polygon_wallet_address')
-      .eq('user_id', bid.driver_id)
-      .maybeSingle();
+    // Fetch driver's and customer's Polygon wallet addresses for escrow deposit
+    const [driverDetailsResult, customerProfileResult] = await Promise.all([
+      supabase.from('driver_details').select('polygon_wallet_address').eq('user_id', bid.driver_id).maybeSingle(),
+      supabase.from('profiles').select('polygon_wallet_address').eq('id', req.user.id).maybeSingle(),
+    ]);
 
-    const driverWallet = driverDetails?.polygon_wallet_address ?? null;
-    if (driverWallet) {
+    const driverWallet = driverDetailsResult.data?.polygon_wallet_address ?? null;
+    const customerWallet = customerProfileResult.data?.polygon_wallet_address ?? null;
+    if (driverWallet && customerWallet) {
       const amountWei = ethers.parseEther((bid.bid_amount / 100).toFixed(2).toString());
-      escrowDeposit(order.order_display_id, driverWallet, amountWei).then(({ txHash }) => {
+      escrowDeposit(order.order_display_id, customerWallet, driverWallet, amountWei).then(({ txHash }) => {
         if (txHash) {
           supabase.from('orders').update({
             escrow_status: 'funded',
@@ -507,7 +507,9 @@ router.post('/:id/bids/:bidId/accept', authenticate, requireRole(['customer']), 
         console.error('[escrow] Unhandled rejection in escrowDeposit:', err.message)
       );
     } else {
-      console.warn(`[escrow] Driver ${bid.driver_id} has no polygon_wallet_address — skipping escrow deposit.`);
+      console.warn(
+        `[escrow] Missing wallet address: driver=${!!driverWallet}, customer=${!!customerWallet} — skipping escrow deposit.`
+      );
     }
 
     // Update order with escrow booking reference
