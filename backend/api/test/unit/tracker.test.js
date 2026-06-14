@@ -747,12 +747,11 @@ describe('removeClientFromAllSubscriptions', () => {
 describe('tracker Redis subscription metadata', () => {
   it('persists subscriptions in Redis when available', async () => {
     const sadd = vi.fn().mockResolvedValue(1);
-    const expire = vi.fn().mockResolvedValue(1);
 
     vi.resetModules();
     vi.doMock('../../src/config/db.js', () => ({
       mongoDb: null,
-      redisClient: { sadd, expire, srem: vi.fn() },
+      redisClient: { sadd, smembers: vi.fn().mockResolvedValue([]), srem: vi.fn() },
       firebaseAdmin: null,
       supabase: null,
     }));
@@ -767,8 +766,7 @@ describe('tracker Redis subscription metadata', () => {
 
     await subscribeWithRedis(ws, { driver_id: 'driver-redis' });
 
-    expect(sadd).toHaveBeenCalledWith('tracking:subscriptions:driver-redis', 'driver-redis');
-    expect(expire).toHaveBeenCalledWith('tracking:subscriptions:driver-redis', 3600);
+    expect(sadd).toHaveBeenCalledWith('user:subscriptions:driver-redis', 'driver-redis');
     expect(sentMessages[0]).toEqual({
       status: 'subscribed',
       target: 'driver-redis',
@@ -778,13 +776,13 @@ describe('tracker Redis subscription metadata', () => {
 
   it('cleans up Redis subscription metadata on disconnect and supports re-subscription after reconnect', async () => {
     const sadd = vi.fn().mockResolvedValue(1);
-    const expire = vi.fn().mockResolvedValue(1);
     const srem = vi.fn().mockResolvedValue(1);
+    const smembers = vi.fn().mockResolvedValue([]);
 
     vi.resetModules();
     vi.doMock('../../src/config/db.js', () => ({
       mongoDb: null,
-      redisClient: { sadd, expire, srem },
+      redisClient: { sadd, srem, smembers },
       firebaseAdmin: null,
       supabase: null,
     }));
@@ -801,7 +799,7 @@ describe('tracker Redis subscription metadata', () => {
     await redisTesting.removeClientFromAllSubscriptions(ws);
     await subscribeWithRedis(ws, { driver_id: 'driver-reconnect' });
 
-    expect(srem).toHaveBeenCalledWith('tracking:subscriptions:driver-reconnect', 'driver-reconnect');
+    expect(srem).not.toHaveBeenCalled();
     expect(ws.send).toHaveBeenLastCalledWith(
       JSON.stringify({
         status: 'subscribed',
@@ -809,6 +807,54 @@ describe('tracker Redis subscription metadata', () => {
         reconnect_supported: true,
       })
     );
+  });
+
+  it('restores subscriptions from Redis on reconnect', async () => {
+    const smembers = vi.fn().mockResolvedValue(['driver-1']);
+
+    vi.resetModules();
+    vi.doMock('../../src/config/db.js', () => ({
+      mongoDb: null,
+      redisClient: { sadd: vi.fn(), smembers, srem: vi.fn() },
+      firebaseAdmin: null,
+      supabase: null,
+    }));
+
+    const { __testing: redisTesting } = await import('../../src/sockets/tracker.js');
+    const ws = {
+      user: { id: 'driver-redis', role: 'driver' },
+      driverId: 'driver-redis',
+      send: vi.fn(),
+    };
+
+    await redisTesting.restoreSubscriptions(ws);
+
+    expect(smembers).toHaveBeenCalledWith('user:subscriptions:driver-redis');
+    expect(redisTesting.getTrackingSubscriptions().get('driver-1')?.has(ws)).toBe(true);
+    expect(ws.subscriptionTargets.has('driver-1')).toBe(true);
+  });
+
+  it('restores subscriptions from Redis on reconnect after a fresh socket is authenticated', async () => {
+    const smembers = vi.fn().mockResolvedValue(['driver-1']);
+
+    vi.resetModules();
+    vi.doMock('../../src/config/db.js', () => ({
+      mongoDb: null,
+      redisClient: { sadd: vi.fn(), smembers, srem: vi.fn() },
+      firebaseAdmin: null,
+      supabase: null,
+    }));
+
+    const { __testing: redisTesting } = await import('../../src/sockets/tracker.js');
+    const restoredWs = {
+      user: { id: 'driver-redis', role: 'driver' },
+      driverId: 'driver-redis',
+      send: vi.fn(),
+    };
+
+    await redisTesting.restoreSubscriptions(restoredWs);
+
+    expect(redisTesting.getTrackingSubscriptions().get('driver-1')?.has(restoredWs)).toBe(true);
   });
 });
 

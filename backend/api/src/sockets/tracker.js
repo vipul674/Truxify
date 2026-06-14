@@ -183,6 +183,7 @@ export function initWebSocketServer(server) {
           role: profile.role,
         };
         ws.driverId = profile.id;
+        await restoreSubscriptions(ws);
         console.log(`✅ WS Authenticated user: ${ws.user.id}`);
       } catch (e) {
         console.error('WS Auth failed:', e.message);
@@ -514,8 +515,7 @@ export async function handleSubscribe(ws, data) {
     try {
       const subscriberId = ws.user?.id || ws.driverId;
       if (subscriberId) {
-        await redisClient.sadd(`tracking:subscriptions:${targetId}`, subscriberId);
-        await redisClient.expire(`tracking:subscriptions:${targetId}`, 3600);
+        await redisClient.sadd(`user:subscriptions:${subscriberId}`, targetId);
       }
     } catch (err) {
       console.error('Redis subscription persistence error:', err.message);
@@ -575,7 +575,7 @@ async function handleUnsubscribe(ws, data) {
       const subscriberId = ws.user?.id || ws.driverId;
       try {
         if (subscriberId) {
-          await redisClient.srem(`tracking:subscriptions:${targetId}`, subscriberId);
+          await redisClient.srem(`user:subscriptions:${subscriberId}`, targetId);
         }
       } catch (err) {
         console.error('Redis subscription cleanup error:', err.message);
@@ -588,19 +588,6 @@ async function handleUnsubscribe(ws, data) {
 }
 
 async function removeClientFromAllSubscriptions(ws) {
-  if (redisClient && ws.subscriptionTargets?.size) {
-    const subscriberId = ws.user?.id || ws.driverId;
-    if (subscriberId) {
-      for (const targetId of ws.subscriptionTargets) {
-        try {
-          await redisClient.srem(`tracking:subscriptions:${targetId}`, subscriberId);
-        } catch (err) {
-          console.error('Redis subscription cleanup error:', err.message);
-        }
-      }
-    }
-  }
-
   trackingSubscriptions.forEach((clients, key) => {
     if (clients.has(ws)) {
       clients.delete(ws);
@@ -612,9 +599,36 @@ async function removeClientFromAllSubscriptions(ws) {
   });
 }
 
+async function restoreSubscriptions(ws) {
+  if (!redisClient || !ws.user?.id) return;
+
+  try {
+    const targets = await redisClient.smembers(`user:subscriptions:${ws.user.id}`);
+
+    ws.subscriptionTargets ??= new Set();
+
+    for (const targetId of targets) {
+      if (!trackingSubscriptions.has(targetId)) {
+        trackingSubscriptions.set(targetId, new Set());
+      }
+
+      trackingSubscriptions.get(targetId).add(ws);
+      ws.subscriptionTargets.add(targetId);
+    }
+  } catch (err) {
+    console.error('Subscription restoration error:', err.message);
+  }
+}
+
 export const __testing = {
   resetTrackingSubscriptions() {
     trackingSubscriptions.clear();
+  },
+  async restoreSubscriptions(ws) {
+    await restoreSubscriptions(ws);
+  },
+  getTrackingSubscriptions() {
+    return trackingSubscriptions;
   },
   flushTelemetryBuffer,
   removeClientFromAllSubscriptions,
