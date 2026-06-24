@@ -1170,7 +1170,7 @@ router.post('/predict-demand', authenticate, userLimiter, requireRole(['customer
 });
 
 // ============================================================================
-// 17. GET DRIVER LOCATION (CUSTOMER OR DRIVER)
+// 19. GET DRIVER LOCATION (CUSTOMER OR DRIVER)
 // ============================================================================
 router.get('/:id/driver-location', authenticate, userLimiter, requireRole(['customer', 'driver']), validateParams(paramIdSchema), async (req, res) => {
   const orderId = req.params.id; // this is order_display_id from client
