@@ -12,7 +12,8 @@ import { ProfileModel } from '../models/ProfileModel.js';
 import { invalidateCachedProfile, invalidateCachedSupabaseProfile } from '../lib/profileCache.js';
 import { validateParams } from '../middleware/validate.js';
 import { paramIdSchema } from '../validation/requestSchemas.js';
-import { updateProfileSchema, updateWalletSchema } from '../validation/requestSchemas.js';
+import { updateProfileSchema } from '../schemas/profile.js';
+import { updateWalletSchema } from '../validation/requestSchemas.js';
 
 const router = express.Router();
 
