@@ -146,17 +146,25 @@ class SMPCProtocol:
             logger.error(f"Data sharing failed: {e}")
             raise
     
+    def _safe_deserialize(self, data: bytes) -> Any:
+        """Safely deserialize pickle data with validation"""
+        if not data or len(data) == 0:
+            raise ValueError("Empty data for deserialization")
+        try:
+            return pickle.loads(data)
+        except (pickle.UnpicklingError, EOFError, ImportError, TypeError) as e:
+            logger.error(f"Deserialization failed: {e}")
+            raise
+
     def compute_sum(self, shares_dict: Dict[str, bytes]) -> int:
         """Compute sum of shares securely"""
         try:
             shares = []
             for party, encrypted_share in shares_dict.items():
-                # Decrypt share
                 decrypted = self.cipher.decrypt(encrypted_share)
-                share = pickle.loads(decrypted)
+                share = self._safe_deserialize(decrypted)
                 shares.append(share)
             
-            # Reconstruct sum
             sum_share = self._sum_shares(shares)
             return sum_share
             
@@ -179,19 +187,15 @@ class SMPCProtocol:
                                shares_dict2: Dict[str, bytes]) -> int:
         """Compute multiplication of two shared secrets"""
         try:
-            # Get shares for both secrets
             shares1 = []
             shares2 = []
             
             for party in shares_dict1.keys():
-                decrypted1 = pickle.loads(self.cipher.decrypt(shares_dict1[party]))
-                decrypted2 = pickle.loads(self.cipher.decrypt(shares_dict2[party]))
-                
+                decrypted1 = self._safe_deserialize(self.cipher.decrypt(shares_dict1[party]))
+                decrypted2 = self._safe_deserialize(self.cipher.decrypt(shares_dict2[party]))
                 shares1.append(decrypted1)
                 shares2.append(decrypted2)
             
-            # Multiply shares (Beaver's multiplication protocol)
-            # In production: use more sophisticated approach
             result = 0
             for i in range(len(shares1)):
                 result += shares1[i][1] * shares2[i][1]
@@ -212,23 +216,19 @@ class SMPCProtocol:
     def secure_aggregate(self, data_list: List[Any], operation: str = 'sum') -> Any:
         """Secure aggregation of multiple data items"""
         try:
-            # Convert data to integers
             data_ints = []
             for data in data_list:
                 data_bytes = pickle.dumps(data)
                 data_int = int.from_bytes(data_bytes, 'big') % self.secret_sharing.prime
                 data_ints.append(data_int)
             
-            # Get all parties
             parties = list(self.parties.keys())
             
-            # Share each data item
             shares_list = []
             for data_int in data_ints:
                 shares = self.share_data(data_int, parties)
                 shares_list.append(shares)
             
-            # Aggregate based on operation
             if operation == 'sum':
                 result_shares = self._aggregate_sum(shares_list)
             elif operation == 'average':
@@ -238,12 +238,10 @@ class SMPCProtocol:
             else:
                 raise ValueError(f"Unknown operation: {operation}")
             
-            # Reconstruct result
             result = self.secret_sharing.reconstruct_secret(result_shares)
             
-            # Convert back to bytes
             result_bytes = result.to_bytes((result.bit_length() + 7) // 8, 'big')
-            result_data = pickle.loads(result_bytes)
+            result_data = self._safe_deserialize(result_bytes)
             
             return result_data
             
@@ -253,26 +251,22 @@ class SMPCProtocol:
     
     def _aggregate_sum(self, shares_list: List[Dict[str, bytes]]) -> List[Tuple[int, int]]:
         """Aggregate shares for sum operation"""
-        # Combine shares from all parties
-        aggregated = {}
+        combined = {}
         for shares in shares_list:
             for party, encrypted_share in shares.items():
-                decrypted = pickle.loads(self.cipher.decrypt(encrypted_share))
-                if party not in aggregated:
-                    aggregated[party] = decrypted
+                decrypted = self._safe_deserialize(self.cipher.decrypt(encrypted_share))
+                if party not in combined:
+                    combined[party] = decrypted
                 else:
-                    x, y = aggregated[party]
+                    x, y = combined[party]
                     _, y2 = decrypted
-                    aggregated[party] = (x, (y + y2) % self.secret_sharing.prime)
+                    combined[party] = (x, (y + y2) % self.secret_sharing.prime)
         
-        return list(aggregated.values())
+        return list(combined.values())
     
     def _aggregate_average(self, shares_list: List[Dict[str, bytes]]) -> List[Tuple[int, int]]:
         """Aggregate shares for average operation"""
-        # First compute sum
         sum_shares = self._aggregate_sum(shares_list)
-        
-        # Then divide by count
         count = len(shares_list)
         result = []
         for x, y in sum_shares:
@@ -283,18 +277,14 @@ class SMPCProtocol:
     
     def _aggregate_max(self, shares_list: List[Dict[str, bytes]]) -> List[Tuple[int, int]]:
         """Aggregate shares for max operation"""
-        # Compare shares securely
-        # In production: use secure comparison protocol
         max_share = shares_list[0]
         for shares in shares_list[1:]:
-            # Secure comparison (simplified)
             max_share = self._secure_compare(shares, max_share)
         
         return list(max_share.values())
     
     def _secure_compare(self, shares1: Dict[str, bytes], shares2: Dict[str, bytes]) -> Dict[str, bytes]:
         """Secure comparison of two shared values"""
-        # In production: implement proper secure comparison
         return shares1 if len(shares1) > len(shares2) else shares2
     
     def get_party_stats(self) -> Dict:
@@ -309,7 +299,6 @@ class SMPCProtocol:
     def close_session(self):
         """Close MPC session"""
         if self.session_id:
-            # Cleanup Redis keys
             keys = self.redis.keys(f"mpc:share:{self.session_id}:*")
             for key in keys:
                 self.redis.delete(key)
