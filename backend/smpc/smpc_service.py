@@ -186,15 +186,12 @@ class SMPCProtocol:
             for party in shares_dict1.keys():
                 decrypted1 = pickle.loads(self.cipher.decrypt(shares_dict1[party]))
                 decrypted2 = pickle.loads(self.cipher.decrypt(shares_dict2[party]))
-                
                 shares1.append(decrypted1)
                 shares2.append(decrypted2)
             
-            # Multiply shares (Beaver's multiplication protocol)
-            # In production: use more sophisticated approach
-            result = 0
-            for i in range(len(shares1)):
-                result += shares1[i][1] * shares2[i][1]
+            # Multiply shares pairwise and reconstruct via Lagrange interpolation
+            product_shares = [(shares1[i][0], shares1[i][1] * shares2[i][1]) for i in range(len(shares1))]
+            result = self.secret_sharing.reconstruct_secret(product_shares)
             
             return result % self.secret_sharing.prime
             
@@ -253,26 +250,22 @@ class SMPCProtocol:
     
     def _aggregate_sum(self, shares_list: List[Dict[str, bytes]]) -> List[Tuple[int, int]]:
         """Aggregate shares for sum operation"""
-        # Combine shares from all parties
-        aggregated = {}
+        combined = {}
         for shares in shares_list:
             for party, encrypted_share in shares.items():
                 decrypted = pickle.loads(self.cipher.decrypt(encrypted_share))
-                if party not in aggregated:
-                    aggregated[party] = decrypted
+                if party not in combined:
+                    combined[party] = decrypted
                 else:
-                    x, y = aggregated[party]
+                    x, y = combined[party]
                     _, y2 = decrypted
-                    aggregated[party] = (x, (y + y2) % self.secret_sharing.prime)
+                    combined[party] = (x, (y + y2) % self.secret_sharing.prime)
         
-        return list(aggregated.values())
+        return list(combined.values())
     
     def _aggregate_average(self, shares_list: List[Dict[str, bytes]]) -> List[Tuple[int, int]]:
         """Aggregate shares for average operation"""
-        # First compute sum
         sum_shares = self._aggregate_sum(shares_list)
-        
-        # Then divide by count
         count = len(shares_list)
         result = []
         for x, y in sum_shares:
@@ -283,11 +276,8 @@ class SMPCProtocol:
     
     def _aggregate_max(self, shares_list: List[Dict[str, bytes]]) -> List[Tuple[int, int]]:
         """Aggregate shares for max operation"""
-        # Compare shares securely
-        # In production: use secure comparison protocol
         max_share = shares_list[0]
         for shares in shares_list[1:]:
-            # Secure comparison (simplified)
             max_share = self._secure_compare(shares, max_share)
         
         return list(max_share.values())
@@ -309,7 +299,6 @@ class SMPCProtocol:
     def close_session(self):
         """Close MPC session"""
         if self.session_id:
-            # Cleanup Redis keys
             keys = self.redis.keys(f"mpc:share:{self.session_id}:*")
             for key in keys:
                 self.redis.delete(key)
